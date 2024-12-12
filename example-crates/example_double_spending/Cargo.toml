@@ -1,0 +1,12 @@
+[package]
+name = "example_double_spending"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bdk_wallet = { path = "../../crates/wallet", features = ["file_store"] }
+bdk_esplora = { path = "../../crates/esplora", features = ["blocking"] }
+anyhow = "1"
