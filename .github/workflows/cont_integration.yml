@@ -23,7 +23,6 @@ jobs:
       matrix:
         rust:
           - version: ${{ needs.prepare.outputs.rust_version }}
-            clippy: true
           - version: 1.63.0 # Overall MSRV
           - version: 1.75.0 # Specific MSRV for `bdk_electrum`
         features:
@@ -33,11 +32,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
             toolchain: ${{ matrix.rust.version }}
-            override: true
-            profile: minimal
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.7.5
       - name: Pin dependencies for MSRV
@@ -81,12 +78,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ needs.prepare.outputs.rust_version }}
-          override: true
-          profile: minimal
-          # target: "thumbv6m-none-eabi"
+          # targets: "thumbv6m-none-eabi"
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.7.5
       - name: Check bdk_chain
@@ -117,12 +112,10 @@ jobs:
       - run: sudo apt-get update || exit 1
       - run: sudo apt-get install -y libclang-common-10-dev clang-10 libc6-dev-i386 || exit 1
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
             toolchain: ${{ needs.prepare.outputs.rust_version }}
-            override: true
-            profile: minimal
-            target: "wasm32-unknown-unknown"
+            targets: "wasm32-unknown-unknown"
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.7.5
       - name: Check bdk wallet
@@ -140,11 +133,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
             toolchain: ${{ needs.prepare.outputs.rust_version }}
-            override: true
-            profile: minimal
             components: rustfmt
       - name: Check fmt
         run: cargo fmt --all -- --config format_code_in_doc_comments=true --check
@@ -152,22 +143,16 @@ jobs:
   clippy_check:
     needs: prepare
     runs-on: ubuntu-latest
-    permissions:
-      checks: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions-rs/toolchain@v1
+      - uses: dtolnay/rust-toolchain@v1
         with:
             toolchain: ${{ needs.prepare.outputs.rust_version }}
             components: clippy
-            override: true
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.7.5
-      - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-          name: Clippy Results
-          args: --all-features --all-targets -- -D warnings
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -Dwarnings
 
   build-examples:
     needs: prepare
@@ -188,11 +173,9 @@ jobs:
       - name: checkout
         uses: actions/checkout@v4
       - name: Install Rust toolchain
-        uses: actions-rs/toolchain@v1
+        uses: dtolnay/rust-toolchain@v1
         with:
           toolchain: ${{ needs.prepare.outputs.rust_version }}
-          override: true
-          profile: minimal
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2.7.5
       - name: Build
