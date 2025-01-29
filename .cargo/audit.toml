@@ -1,0 +1,6 @@
+# see more info: https://github.com/rustsec/rustsec/blob/main/cargo-audit/README.md#ignoring-advisories
+[advisories]
+ignore = [
+    # atty it's been used as a dev-dependency and the fix would require us to break our MSRV (1.63.0)
+    "RUSTSEC-2024-0375", 
+]
