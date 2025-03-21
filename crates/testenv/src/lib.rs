@@ -10,7 +10,13 @@ use bdk_chain::{
     },
     local_chain::CheckPoint,
 };
-use electrsd::corepc_node::{anyhow::Context, TemplateRequest, TemplateRules};
+use electrsd::{
+    corepc_client::{
+        client_sync,
+        types::{self, model, v17},
+    },
+    corepc_node::{anyhow::Context, serde_json, TemplateRequest, TemplateRules},
+};
 
 pub use electrsd;
 pub use electrsd::corepc_client;
@@ -309,6 +315,34 @@ impl TestEnv {
     pub fn genesis_hash(&self) -> anyhow::Result<BlockHash> {
         let hash = self.bitcoind.client.get_block_hash(0)?.into_model()?.0;
         Ok(hash)
+    }
+
+    /// Get the list of unspent transaction outputs with `minconf` = 0.
+    pub fn list_unspent(&self) -> anyhow::Result<model::ListUnspent> {
+        let list_unspent: Result<types::v24::ListUnspent, client_sync::Error> = self
+            .rpc_client()
+            .call("listunspent", &[serde_json::to_value(0)?]);
+        let outcome = list_unspent?.into_model()?;
+        Ok(outcome)
+    }
+
+    /// Get the transaction if the specified block is available and the transaction is in that
+    /// block.
+    pub fn get_raw_transaction_verbose(
+        &self,
+        txid: &Txid,
+        block_hash: &BlockHash,
+    ) -> anyhow::Result<v17::GetRawTransactionVerbose> {
+        let get_raw_transaction_verbose: Result<v17::GetRawTransactionVerbose, client_sync::Error> =
+            self.rpc_client().call(
+                "getrawtransaction",
+                &[
+                    serde_json::to_value(txid)?,
+                    true.into(),
+                    serde_json::to_value(block_hash)?,
+                ],
+            );
+        Ok(get_raw_transaction_verbose?)
     }
 }
 
