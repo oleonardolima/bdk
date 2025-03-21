@@ -4,9 +4,7 @@ use bdk_chain::spk_client::{FullScanRequest, SyncRequest};
 use bdk_chain::spk_txout::SpkTxOutIndex;
 use bdk_chain::{ConfirmationBlockTime, IndexedTxGraph, TxGraph};
 use bdk_esplora::EsploraAsyncExt;
-use bdk_testenv::bitcoincore_rpc::json::CreateRawTransactionInput;
-use bdk_testenv::bitcoincore_rpc::RawTx;
-use bdk_testenv::{anyhow, bitcoincore_rpc::RpcApi, TestEnv};
+use bdk_testenv::{anyhow, TestEnv};
 use esplora_client::{self, Builder};
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::str::FromStr;
@@ -30,7 +28,8 @@ pub async fn detect_receive_tx_cancel() -> anyhow::Result<()> {
     let client = Builder::new(base_url.as_str()).build_async()?;
 
     let mut graph = IndexedTxGraph::<ConfirmationBlockTime, _>::new(SpkTxOutIndex::<()>::default());
-    let (chain, _) = LocalChain::from_genesis_hash(env.bitcoind.client.get_block_hash(0)?);
+    let (chain, _) =
+        LocalChain::from_genesis_hash(env.bitcoind.client.get_block_hash(0)?.block_hash()?);
 
     // Get receiving address.
     let receiver_spk = common::get_test_spk();
@@ -147,26 +146,16 @@ pub async fn test_update_tx_graph_without_keychain() -> anyhow::Result<()> {
     ];
 
     let _block_hashes = env.mine_blocks(101, None)?;
-    let txid1 = env.bitcoind.client.send_to_address(
-        &receive_address1,
-        Amount::from_sat(10000),
-        None,
-        None,
-        None,
-        None,
-        Some(1),
-        None,
-    )?;
-    let txid2 = env.bitcoind.client.send_to_address(
-        &receive_address0,
-        Amount::from_sat(20000),
-        None,
-        None,
-        None,
-        None,
-        Some(1),
-        None,
-    )?;
+    let txid1 = env
+        .bitcoind
+        .client
+        .send_to_address(&receive_address1, Amount::from_sat(10000))?
+        .txid()?;
+    let txid2 = env
+        .bitcoind
+        .client
+        .send_to_address(&receive_address0, Amount::from_sat(20000))?
+        .txid()?;
     let _block_hashes = env.mine_blocks(1, None)?;
     while client.get_height().await.unwrap() < 102 {
         sleep(Duration::from_millis(10))
@@ -215,7 +204,7 @@ pub async fn test_update_tx_graph_without_keychain() -> anyhow::Result<()> {
         let tx_fee = env
             .bitcoind
             .client
-            .get_transaction(&tx.compute_txid(), None)
+            .get_transaction(&tx.compute_txid())
             .expect("Tx must exist")
             .fee
             .expect("Fee must exist")
@@ -271,16 +260,11 @@ pub async fn test_async_update_tx_graph_stop_gap() -> anyhow::Result<()> {
         .collect();
 
     // Then receive coins on the 4th address.
-    let txid_4th_addr = env.bitcoind.client.send_to_address(
-        &addresses[3],
-        Amount::from_sat(10000),
-        None,
-        None,
-        None,
-        None,
-        Some(1),
-        None,
-    )?;
+    let txid_4th_addr = env
+        .bitcoind
+        .client
+        .send_to_address(&addresses[3], Amount::from_sat(10000))?
+        .txid()?;
     let _block_hashes = env.mine_blocks(1, None)?;
     while client.get_height().await.unwrap() < 103 {
         sleep(Duration::from_millis(10))
@@ -317,16 +301,11 @@ pub async fn test_async_update_tx_graph_stop_gap() -> anyhow::Result<()> {
     assert_eq!(full_scan_update.last_active_indices[&0], 3);
 
     // Now receive a coin on the last address.
-    let txid_last_addr = env.bitcoind.client.send_to_address(
-        &addresses[addresses.len() - 1],
-        Amount::from_sat(10000),
-        None,
-        None,
-        None,
-        None,
-        Some(1),
-        None,
-    )?;
+    let txid_last_addr = env
+        .bitcoind
+        .client
+        .send_to_address(&addresses[addresses.len() - 1], Amount::from_sat(10000))?
+        .txid()?;
     let _block_hashes = env.mine_blocks(1, None)?;
     while client.get_height().await.unwrap() < 104 {
         sleep(Duration::from_millis(10))
