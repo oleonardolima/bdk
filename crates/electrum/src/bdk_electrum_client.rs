@@ -506,12 +506,23 @@ impl<E: ElectrumApi> BdkElectrumClient<E> {
             }
         }
 
-        // Fetch merkle proofs.
-        let txids_and_heights = to_fetch.iter().map(|&(txid, height, _)| (txid, height));
-        let proofs = self.inner.batch_transaction_get_merkle(txids_and_heights)?;
+        // Batch all get_merkle calls.
+        let mut batch = electrum_client::Batch::default();
+        for &(txid, height, _) in &to_fetch {
+            batch.raw(
+                "blockchain.transaction.get_merkle".into(),
+                vec![
+                    electrum_client::Param::String(format!("{txid:x}")),
+                    electrum_client::Param::Usize(height),
+                ],
+            );
+        }
+        let resps = self.inner.batch_call(&batch)?;
 
         // Validate each proof, retrying once for each stale header.
-        for ((txid, height, hash), proof) in to_fetch.into_iter().zip(proofs.into_iter()) {
+        for ((txid, height, hash), resp) in to_fetch.into_iter().zip(resps.into_iter()) {
+            let proof: electrum_client::GetMerkleRes = serde_json::from_value(resp)?;
+
             let mut header = {
                 let cache = self.block_header_cache.lock().unwrap();
                 cache
