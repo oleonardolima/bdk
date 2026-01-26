@@ -313,6 +313,11 @@ impl TestEnv {
     pub fn get_block_hash(&self, height: u64) -> anyhow::Result<BlockHash> {
         Ok(self.bitcoind.client.get_block_hash(height)?.block_hash()?)
     }
+
+    /// Get the current height of the most-work fully-validated chain.
+    pub fn get_block_count(&self) -> anyhow::Result<u32> {
+        Ok(self.bitcoind.client.get_block_count()?.into_model().0 as u32)
+    }
 }
 
 #[cfg(test)]
@@ -330,7 +335,7 @@ mod test {
         // Mine some blocks.
         env.mine_blocks(101, None)?;
         env.wait_until_electrum_sees_block(Duration::from_secs(6))?;
-        let height = env.bitcoind.client.get_block_count()?.into_model().0;
+        let height = env.get_block_count()? as u64;
         let blocks = (0..=height)
             .map(|i| env.bitcoind.client.get_block_hash(i))
             .collect::<Result<Vec<_>, _>>()?;
@@ -338,7 +343,7 @@ mod test {
         // Perform reorg on six blocks.
         env.reorg(6)?;
         env.wait_until_electrum_sees_block(Duration::from_secs(6))?;
-        let reorged_height = env.bitcoind.client.get_block_count()?.into_model().0;
+        let reorged_height = env.get_block_count()? as u64;
         let reorged_blocks = (0..=height)
             .map(|i| env.bitcoind.client.get_block_hash(i))
             .collect::<Result<Vec<_>, _>>()?;

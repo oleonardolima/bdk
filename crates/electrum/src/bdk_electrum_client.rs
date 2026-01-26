@@ -793,7 +793,7 @@ mod test {
         // Mine block that confirms transaction.
         env.mine_blocks(1, None)?;
         env.wait_until_electrum_sees_block(Duration::from_secs(6))?;
-        let height: u32 = env.rpc_client().get_block_count()?.into_model().0 as u32;
+        let height = env.get_block_count()?;
 
         // Add the pre-reorg block that the tx is confirmed in to the header cache.
         let header = electrum_client.inner.block_header(height as usize)?;
