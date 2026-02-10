@@ -14,7 +14,7 @@ workspace = true
 
 [dependencies]
 bdk_core = { path = "../core", version = "0.6.1" }
-electrum-client = { version = "0.24.0", features = [ "proxy" ], default-features = false }
+electrum-client = { git = "https://github.com/tnull/rust-electrum-client.git", branch = "2026-01-protocol-v1.6", features = [ "proxy" ], default-features = false }
 
 [dev-dependencies]
 bdk_testenv = { path = "../testenv" }
