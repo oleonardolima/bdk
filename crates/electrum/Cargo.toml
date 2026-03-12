@@ -34,3 +34,6 @@ required-features = ["use-rustls"]
 [[bench]]
 name = "test_sync"
 harness = false
+
+[patch.crates-io]
+electrum-client = { git = "https://github.com/EddieHouston/rust-electrum-client.git", branch = "rpc-auth" }
