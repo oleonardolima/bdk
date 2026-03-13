@@ -7,6 +7,13 @@ Contributors do not need to change this file but do need to add changelog detail
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [esplora-0.22.2]
+
+### Fixed
+
+- In `bdk_esplora` now avoids a panic in stop‑gap scan loop by tracking consecutive unused scripts to compute the gap boundary. #2148
+- The `esplora_client` is bumped to `0.12.3` so that the new `.get_block_infos` method is always available. #2148
+
 ## [esplora-0.22.1]
 
 ### Added
@@ -45,3 +52,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 [esplora-0.21.0]: https://github.com/bitcoindevkit/bdk/releases/tag/esplora-0.21.0
 [esplora-0.22.0]: https://github.com/bitcoindevkit/bdk/releases/tag/esplora-0.22.0
 [esplora-0.22.1]: https://github.com/bitcoindevkit/bdk/releases/tag/esplora-0.22.1
+[esplora-0.22.2]: https://github.com/bitcoindevkit/bdk/releases/tag/esplora-0.22.2
