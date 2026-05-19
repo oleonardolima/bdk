@@ -5,9 +5,9 @@ use core::fmt;
 use core::ops::RangeBounds;
 
 use crate::collections::BTreeMap;
-use crate::{BlockId, ChainOracle, Merge};
+use crate::{Anchor, BlockId, CanonicalParams, CanonicalView, ChainOracle, Merge, TxGraph};
+use bdk_core::{ChainQuery, CheckPointEntry, ToBlockHash};
 pub use bdk_core::{CheckPoint, CheckPointIter};
-use bdk_core::{CheckPointEntry, ToBlockHash};
 use bitcoin::block::Header;
 use bitcoin::BlockHash;
 
@@ -100,6 +100,62 @@ impl<D> ChainOracle for LocalChain<D> {
 
 // Methods for `LocalChain<BlockHash>`
 impl LocalChain<BlockHash> {
+    /// Canonicalize a transaction graph using this chain.
+    ///
+    /// This method processes any type implementing [`ChainQuery`], handling all its requests
+    /// to determine which transactions are canonical, and returns the query's output.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # use bdk_chain::{CanonicalTask, CanonicalParams, TxGraph, local_chain::LocalChain};
+    /// # use bdk_core::BlockId;
+    /// # use bitcoin::hashes::Hash;
+    /// # let tx_graph: TxGraph<BlockId> = TxGraph::default();
+    /// # let chain = LocalChain::from_blocks([(0, bitcoin::BlockHash::all_zeros())].into_iter().collect()).unwrap();
+    /// let chain_tip = chain.tip().block_id();
+    /// let task = CanonicalTask::new(&tx_graph, chain_tip, CanonicalParams::default());
+    /// let view = chain.canonicalize(task);
+    /// ```
+    pub fn canonicalize<Q>(&self, mut task: Q) -> Q::Output
+    where
+        Q: ChainQuery,
+    {
+        let chain_tip = task.tip();
+        while let Some(request) = task.next_query() {
+            let mut best_block_id = None;
+            for block_id in &request {
+                if self
+                    .is_block_in_chain(*block_id, chain_tip)
+                    .expect("infallible")
+                    == Some(true)
+                {
+                    best_block_id = Some(*block_id);
+                    break;
+                }
+            }
+            task.resolve_query(best_block_id);
+        }
+        task.finish()
+    }
+
+    /// Convenience method that runs both canonicalization phases and returns a [`CanonicalView`].
+    ///
+    /// This is equivalent to:
+    /// ```ignore
+    /// let canonical_txs = chain.canonicalize(tx_graph.canonical_task(tip, params));
+    /// let view = chain.canonicalize(canonical_txs.view_task(tx_graph));
+    /// ```
+    pub fn canonical_view<A: Anchor>(
+        &self,
+        tx_graph: &TxGraph<A>,
+        tip: BlockId,
+        params: CanonicalParams,
+    ) -> CanonicalView<A> {
+        let canonical_txs = self.canonicalize(tx_graph.canonical_task(tip, params));
+        self.canonicalize(canonical_txs.view_task(tx_graph))
+    }
+
     /// Update the chain with a given [`Header`] at `height` which you claim is connected to a
     /// existing block in the chain.
     ///
