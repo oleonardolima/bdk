@@ -1,6 +1,7 @@
 use bdk_chain::keychain_txout::DEFAULT_LOOKAHEAD;
 use serde_json::json;
 use std::cmp;
+use std::convert::Infallible;
 use std::env;
 use std::fmt;
 use std::str::FromStr;
@@ -18,7 +19,6 @@ use bdk_chain::miniscript::{
     psbt::PsbtExt,
     Descriptor, DescriptorPublicKey, ForEachKey,
 };
-use bdk_chain::CanonicalizationParams;
 use bdk_chain::ConfirmationBlockTime;
 use bdk_chain::{
     indexer::keychain_txout::{self, KeychainTxOutIndex},
@@ -258,18 +258,15 @@ pub struct ChangeInfo {
     pub index: u32,
 }
 
-pub fn create_tx<O: ChainOracle>(
+pub fn create_tx(
     graph: &mut KeychainTxGraph,
-    chain: &O,
+    chain: &LocalChain,
     assets: &Assets,
     cs_algorithm: CoinSelectionAlgo,
     address: Address,
     value: u64,
     feerate: f32,
-) -> anyhow::Result<(Psbt, Option<ChangeInfo>)>
-where
-    O::Error: core::error::Error + Send + Sync + 'static,
-{
+) -> anyhow::Result<(Psbt, Option<ChangeInfo>)> {
     let mut changeset = keychain_txout::ChangeSet::default();
 
     // get planned utxos
@@ -422,15 +419,14 @@ where
 // Alias the elements of `planned_utxos`
 pub type PlanUtxo = (Plan, FullTxOut<ConfirmationBlockTime>);
 
-pub fn planned_utxos<O: ChainOracle>(
+pub fn planned_utxos(
     graph: &KeychainTxGraph,
-    chain: &O,
+    chain: &LocalChain,
     assets: &Assets,
-) -> Result<Vec<PlanUtxo>, O::Error> {
-    let chain_tip = chain.get_chain_tip()?;
+) -> Result<Vec<PlanUtxo>, Infallible> {
     let outpoints = graph.index.outpoints();
-    graph
-        .try_canonical_view(chain, chain_tip, CanonicalizationParams::default())?
+    chain
+        .canonical_view(graph.graph(), chain.tip().block_id(), Default::default())
         .filter_unspent_outpoints(outpoints.iter().cloned())
         .filter_map(|((k, i), full_txo)| -> Option<Result<PlanUtxo, _>> {
             let desc = graph
@@ -522,12 +518,8 @@ pub fn handle_commands<CS: clap::Subcommand, S: clap::Args>(
                 }
             }
 
-            let balance = graph
-                .try_canonical_view(
-                    chain,
-                    chain.get_chain_tip()?,
-                    CanonicalizationParams::default(),
-                )?
+            let balance = chain
+                .canonical_view(graph.graph(), chain.tip().block_id(), Default::default())
                 .balance(
                     graph.index.outpoints().iter().cloned(),
                     |(k, _), _| k == &Keychain::Internal,
@@ -569,8 +561,8 @@ pub fn handle_commands<CS: clap::Subcommand, S: clap::Args>(
                     confirmed,
                     unconfirmed,
                 } => {
-                    let txouts = graph
-                        .try_canonical_view(chain, chain_tip, CanonicalizationParams::default())?
+                    let txouts = chain
+                        .canonical_view(graph.graph(), chain_tip, Default::default())
                         .filter_outpoints(outpoints.iter().cloned())
                         .filter(|(_, full_txo)| match (spent, unspent) {
                             (true, false) => full_txo.spent_by.is_some(),
@@ -629,7 +621,7 @@ pub fn handle_commands<CS: clap::Subcommand, S: clap::Args>(
 
                     create_tx(
                         &mut graph,
-                        &*chain,
+                        &chain,
                         &assets,
                         coin_select,
                         address,
