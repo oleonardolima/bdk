@@ -1,0 +1,13 @@
+[package]
+name = "example_bitcoinkernel"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bdk_chain = { path = "../../crates/chain", features = ["serde"] }
+bdk_testenv = { path = "../../crates/testenv", features = ["serde"] }
+bitcoinkernel = { git = "https://github.com/oleonardolima/rust-bitcoinkernel", branch = "feat/add-custom-signet-support" }
+env_logger = { version = "0.11" }
+log = { version = "0.4" }
