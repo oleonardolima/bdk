@@ -203,6 +203,7 @@ pub type CanonicalView<A> = Canonical<A, ChainPosition<A>>;
 
 /// Type alias for canonical transactions with unresolved
 /// [`CanonicalReason`](crate::canonical_task::CanonicalReason)s.
+// TODO: (@oleonardolima) a better name would be CanonicalGraph
 pub type CanonicalTxs<A> = Canonical<A, crate::canonical_task::CanonicalReason<A>>;
 
 impl<A, P: Clone> Canonical<A, P> {
@@ -435,6 +436,7 @@ impl<A: Anchor> CanonicalView<A> {
     ///     6,  // Require 6 confirmations
     /// );
     /// ```
+    /// TODO: (@oleonardolima) could the balance be optimized by adding colors to the tx node in the tx graph ?
     pub fn balance<'v, O: Clone + 'v>(
         &'v self,
         outpoints: impl IntoIterator<Item = (O, OutPoint)> + 'v,

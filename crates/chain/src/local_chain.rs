@@ -62,6 +62,7 @@ where
 
 /// A local chain of checkpoints.
 #[derive(Debug, Clone)]
+// TODO: (@oleonardo) why are we using a linked list instead of a map ? (mostly we are iterating and searching)
 pub struct LocalChain<D = BlockHash> {
     tip: CheckPoint<D>,
 }
@@ -128,7 +129,12 @@ impl LocalChain<BlockHash> {
         let chain_tip = task.tip();
         while let Some(request) = task.next_query() {
             let mut best_block_id = None;
+            // let best_block_id = request.iter().find(self.is_block_in_chain(*block_id, chain_tip) == Some(true));
             for block_id in &request {
+                // TODO: (@oleonardolima) what happens if my best chain is broken and there's multiple anchors
+                // available in the best chain / localchain ?
+                //
+                // this SHOULD have a debug assert at least!
                 if self.is_block_in_chain(*block_id, chain_tip) == Some(true) {
                     best_block_id = Some(*block_id);
                     break;
@@ -146,6 +152,8 @@ impl LocalChain<BlockHash> {
     /// let canonical_txs = chain.canonicalize(tx_graph.canonical_task(tip, params));
     /// let view = chain.canonicalize(canonical_txs.view_task(tx_graph));
     /// ```
+    // TODO: (@oleonardolima) check with Bark team and Luca how impactful is calling this multiple times!
+    // TODO: (@oleonardolima) it's also good to do a profiling to check when it's being called, and where it loses more time.
     pub fn canonical_view<A: Anchor>(
         &self,
         tx_graph: &TxGraph<A>,

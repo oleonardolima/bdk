@@ -11,6 +11,8 @@
 //! outputs, which we usually call "floating outputs"; these are usually inserted using the
 //! [`insert_txout`] method.).
 //!
+//! // TODO: (@oloneardolima) update this documentation to reflect the current state, methods and fields.
+//!
 //! The graph contains transactions in the form of [`TxNode`]s. Each node contains the txid, the
 //! transaction (whole or partial), the blocks that it is anchored to (see the [`Anchor`]
 //! documentation for more details), and the timestamp of the last time we saw the transaction as
@@ -36,6 +38,7 @@
 //! typical wallet operations like querying balances, listing outputs, transactions, and UTXOs.
 //! You must construct this view before performing these operations.
 //!
+//! // TODO: (@oleonardolima) add the benefit of splitting into canonicalization and chain position resolving.
 //! The separation between task creation and execution (sans-IO pattern) enables:
 //! * Better testability - tasks can be tested without a real chain
 //! * Flexibility - different chain oracle implementations can be used
@@ -174,9 +177,11 @@ impl<A: Anchor> From<TxUpdate<A>> for TxGraph<A> {
 ///
 /// [module-level documentation]: crate::tx_graph
 #[derive(Clone, Debug, PartialEq)]
+// TODO: (@oleonardolima) why do we do not require the specific `Anchor` trait to be used by the caller here ?
 pub struct TxGraph<A = ConfirmationBlockTime> {
     txs: HashMap<Txid, TxNodeInternal>,
     spends: BTreeMap<OutPoint, HashSet<Txid>>,
+
     anchors: HashMap<Txid, BTreeSet<A>>,
     first_seen: HashMap<Txid, u64>,
     last_seen: HashMap<Txid, u64>,
@@ -554,12 +559,14 @@ impl<A> TxGraph<A> {
         tx: &'g Transaction,
     ) -> impl Iterator<Item = (usize, Txid)> + 'g {
         let txid = tx.compute_txid();
+
         tx.input
             .iter()
             .enumerate()
+            // TODO: (@oleonardolima) does it really need to be filter_map ? why ?
             .filter_map(move |(vin, txin)| self.spends.get(&txin.previous_output).zip(Some(vin)))
             .flat_map(|(spends, vin)| core::iter::repeat(vin).zip(spends.iter().cloned()))
-            .filter(move |(_, conflicting_txid)| *conflicting_txid != txid)
+            .filter(move |(_vin, conflicting_txid)| *conflicting_txid != txid)
     }
 
     /// Get all transaction anchors known by [`TxGraph`].
@@ -708,10 +715,14 @@ impl<A: Anchor> TxGraph<A> {
             }
             partial_tx => {
                 for txin in &tx.input {
+                    // TODO: (@oleonardolima) does this make sense ? why do we ignore the previous output ?
+                    // it's basically testing if the `tx` is coinbase or not, however it can be achieved with a simple `tx.is_coinbase()`.
+
                     // this means the tx is coinbase so there is no previous output
                     if txin.previous_output.is_null() {
                         continue;
                     }
+
                     self.spends
                         .entry(txin.previous_output)
                         .or_default()
@@ -939,6 +950,10 @@ impl<A: Anchor> TxGraph<A> {
         }
         changeset
     }
+
+    // TODO: (@oleonardolima) The `ChangeSet` does not handle inconsistent views between the memory and what's persisted in DB,
+    // if I miss the persistance between one generation and the other I lost the changeset and does not know what diff I need to persist
+    // maybe we could have a pair of counters in TxGraph to now what diffs I've generated and what I could generate again.
 
     /// Determines the [`ChangeSet`] between `self` and an empty [`TxGraph`].
     pub fn initial_changeset(&self) -> ChangeSet<A> {
@@ -1405,7 +1420,7 @@ where
 
     /// Traverse all descendants that are not filtered out by the provided closure.
     pub fn run_until_finished(self) {
-        self.for_each(|_| {})
+        self.for_each(|_what| {})
     }
 
     fn populate_queue(&mut self, depth: usize, txid: Txid) {
@@ -1413,7 +1428,7 @@ where
             .graph
             .spends
             .range(tx_outpoint_range(txid))
-            .flat_map(|(_, spends)| spends)
+            .flat_map(|(_outpoint, spends)| spends)
             .map(|&txid| (depth, txid));
         self.queue.extend(spend_paths);
     }

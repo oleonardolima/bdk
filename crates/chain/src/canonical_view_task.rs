@@ -63,7 +63,7 @@ impl<'g, A: Anchor> CanonicalViewTask<'g, A> {
 
         let mut unprocessed_anchor_checks = VecDeque::new();
         for txid in &order {
-            if let Some((_, reason)) = txs.get(txid) {
+            if let Some((_tx, reason)) = txs.get(txid) {
                 if matches!(reason, CanonicalReason::ObservedIn { .. }) {
                     continue;
                 }

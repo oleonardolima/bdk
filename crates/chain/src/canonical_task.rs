@@ -56,6 +56,7 @@ pub struct CanonicalParams {
 /// (via [`CanonicalReason`](crate::CanonicalReason)). The output is a [`CanonicalTxs`] which can
 /// then be further processed by [`CanonicalViewTask`](crate::CanonicalViewTask) to resolve reasons
 /// into [`ChainPosition`](crate::ChainPosition)s.
+// TODO: (@oleonardolima) should this be public ?
 pub struct CanonicalTask<'g, A> {
     tx_graph: &'g TxGraph<A>,
     chain_tip: BlockId,
@@ -86,6 +87,7 @@ impl<'g, A: Anchor> ChainQuery for CanonicalTask<'g, A> {
         loop {
             match self.current_stage {
                 CanonicalStage::AssumedTxs => {
+                    // TODO: (@oleonardolima) can't we just loop it here until exhaustion ?
                     if let Some((txid, tx)) = self.unprocessed_assumed_txs.next() {
                         if !self.is_canonicalized(txid) {
                             self.mark_canonical(txid, tx, CanonicalReason::assumed());
@@ -94,7 +96,7 @@ impl<'g, A: Anchor> ChainQuery for CanonicalTask<'g, A> {
                     }
                 }
                 CanonicalStage::AnchoredTxs => {
-                    if let Some((_txid, _, anchors)) = self.unprocessed_anchored_txs.front() {
+                    if let Some((_txid, _tx, anchors)) = self.unprocessed_anchored_txs.front() {
                         let block_ids =
                             anchors.iter().map(|anchor| anchor.anchor_block()).collect();
                         return Some(block_ids);
@@ -141,6 +143,7 @@ impl<'g, A: Anchor> ChainQuery for CanonicalTask<'g, A> {
         match self.current_stage {
             CanonicalStage::AnchoredTxs => {
                 // Process directly anchored transaction response
+                // TODO: (@oleonardolima) is there a possible scenario that gets None in this `pop_front()`.
                 if let Some((txid, tx, anchors)) = self.unprocessed_anchored_txs.pop_front() {
                     // Find the anchor that matches the confirmed BlockId
                     let best_anchor = response.and_then(|block_id| {
@@ -164,6 +167,7 @@ impl<'g, A: Anchor> ChainQuery for CanonicalTask<'g, A> {
                         None => {
                             // No confirmed anchor found, add to leftover transactions for later
                             // processing
+                            // TODO: (@oleonardolima) how can I get rid of this .expect() ? better, how can I reach it ?
                             self.unprocessed_leftover_txs.push_back((
                                 txid,
                                 tx,
@@ -194,11 +198,13 @@ impl<'g, A: Anchor> ChainQuery for CanonicalTask<'g, A> {
     }
 
     fn finish(self) -> Self::Output {
+        // TODO: (@oleonardolima) update these variable names to not reflect canonical view.
         let mut view_order = Vec::new();
         let mut view_txs = HashMap::new();
         let mut view_spends = HashMap::new();
 
         for txid in &self.canonical_order {
+            // TODO: (@oleonardolima) do we need a debug assert here too ?
             if let Some((tx, reason)) = self.canonical.get(txid) {
                 view_order.push(*txid);
 
@@ -219,8 +225,10 @@ impl<'g, A: Anchor> ChainQuery for CanonicalTask<'g, A> {
 
 impl<'g, A: Anchor> CanonicalTask<'g, A> {
     /// Creates a new canonicalization task.
+    // TODO: (@oleonardolima) add better docs and comments on what's happening in here!!!!!
     pub fn new(tx_graph: &'g TxGraph<A>, chain_tip: BlockId, params: CanonicalParams) -> Self {
         let anchors = tx_graph.all_anchors();
+
         let unprocessed_assumed_txs = Box::new(
             params
                 .assume_canonical
@@ -228,13 +236,17 @@ impl<'g, A: Anchor> CanonicalTask<'g, A> {
                 .rev()
                 .filter_map(|txid| Some((txid, tx_graph.get_tx(txid)?))),
         );
+
         let unprocessed_anchored_txs: VecDeque<_> = tx_graph
             .txids_by_descending_anchor_height()
+            // TODO: (@oleonardolima) is this tx_graph.get_tx(txid)? filtering anything.
             .filter_map(|(_, txid)| Some((txid, tx_graph.get_tx(txid)?, anchors.get(&txid)?)))
             .collect();
+
         let unprocessed_seen_txs = Box::new(
             tx_graph
-                .txids_by_descending_last_seen()
+            .txids_by_descending_last_seen()
+            // TODO: (@oleonardolima) is this tx_graph.get_tx(txid)? filtering anything.
                 .filter_map(|(last_seen, txid)| Some((txid, tx_graph.get_tx(txid)?, last_seen))),
         );
 
@@ -255,6 +267,7 @@ impl<'g, A: Anchor> CanonicalTask<'g, A> {
         }
     }
 
+    // TODO: (@oleonardolima) can we get a better name ?
     fn is_canonicalized(&self, txid: Txid) -> bool {
         self.canonical.contains_key(&txid) || self.not_canonical.contains(&txid)
     }
@@ -283,6 +296,7 @@ impl<'g, A: Anchor> CanonicalTask<'g, A> {
                     reason.to_transitive(starting_txid)
                 };
 
+                // TODO: (@oleonardolima) move this use to a proper place!!!
                 use crate::collections::hash_map::Entry;
                 let canonical_entry = match self.canonical.entry(this_txid) {
                     // Already visited tx before, exit early.
@@ -295,6 +309,7 @@ impl<'g, A: Anchor> CanonicalTask<'g, A> {
                 // Any conflicts with a canonical tx can be added to `not_canonical`. Descendants
                 // of `not_canonical` txs can also be added to `not_canonical`.
                 for (_, conflict_txid) in self.tx_graph.direct_conflicts(&tx) {
+                    // NOTE: it's a reader monad pattern, the tx graph is the context of the reader.
                     TxDescendants::new_include_root(
                         self.tx_graph,
                         conflict_txid,
@@ -310,6 +325,8 @@ impl<'g, A: Anchor> CanonicalTask<'g, A> {
                     .run_until_finished()
                 }
 
+                // TODO: (@oleonardo) can't this be done as a transactions, atomically instead ?
+                // e.g use a journal instead of the side effects above
                 if self.not_canonical.contains(&this_txid) {
                     // Early exit if self-double-spend is detected.
                     detected_self_double_spend = true;
@@ -323,6 +340,7 @@ impl<'g, A: Anchor> CanonicalTask<'g, A> {
         )
         .run_until_finished();
 
+        // TODO: (@oleonardolima) this algorithm is only optimal because the undo scenario is rare.
         if detected_self_double_spend {
             // Undo changes
             for (txid, _, _) in staged_canonical {
@@ -368,6 +386,7 @@ pub enum CanonicalReason<A> {
     },
     /// This transaction does not conflict with any other transaction with a more recent
     /// [`ObservedIn`] value or one that is anchored in the best chain.
+    // TODO: (@oleonardolima) when do we use this scenario ? why does it exists ?
     ObservedIn {
         /// The [`ObservedIn`] value of the transaction.
         observed_in: ObservedIn,
