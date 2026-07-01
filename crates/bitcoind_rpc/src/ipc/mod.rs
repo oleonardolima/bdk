@@ -2,15 +2,25 @@
 //!
 //! This is an experimental, feature-gated alternative to the JSON-RPC [`Emitter`](crate::Emitter).
 //! It talks to `bitcoin-node` over the multiprocess IPC unix socket instead of JSON-RPC, and is
-//! meant to mirror the JSON-RPC emitter: a synchronous, poll-based [`IpcEmitter::next_block`] loop
-//! that yields the same [`BlockEvent`](crate::BlockEvent) values.
+//! meant to mirror the JSON-RPC emitter: a synchronous, poll-based
+//! [`next_block`](crate::ipc::IpcEmitter::next_block) loop that yields the same
+//! [`BlockEvent`](crate::BlockEvent) values. It is a proof of concept: only block emission is
+//! implemented (no mempool, no compact filters).
 //!
-//! Requires a node built from Bitcoin Core PR #29409 (which exposes the `Chain` interface over
-//! IPC) and the `capnp` compiler at build time. See `examples/README.md`.
+//! # Experimental: requires a patched Bitcoin Core
+//!
+//! The `Chain` IPC interface used here is **not** in released Bitcoin Core. It requires a node
+//! built from [Bitcoin Core PR #29409](https://github.com/bitcoin/bitcoin/pull/29409), which adds
+//! the `Chain` Cap'n Proto wrapper. Bitcoin Core is not vendored: `build.rs` reads the schemas from
+//! a Bitcoin Core checkout whose path is given by the `BITCOIN_CORE_SRC` environment variable.
+//!
+//! Building with the `ipc` feature therefore needs the `capnp` compiler (1.x) installed and
+//! `BITCOIN_CORE_SRC` set, and running needs a `bitcoin-node` built from that same checkout with
+//! `-ipcbind=unix`. See `examples/README.md` and `docs/ipc_poc_plan.md` for the full setup.
 
-// Rust bindings generated at build time from the Bitcoin Core Cap'n Proto schemas vendored under
-// `vendor/bitcoin-core` (see `build.rs`). The generated code is not written to satisfy this
-// crate's lints, so relax them for the whole module. Every schema is included as a flat
+// Rust bindings generated at build time from the Bitcoin Core Cap'n Proto schemas in the checkout
+// pointed to by BITCOIN_CORE_SRC (see `build.rs`). The generated code is not written to satisfy
+// this crate's lints, so relax them for the whole module. Every schema is included as a flat
 // `<name>_capnp` module under `crate::ipc::capnp_gen`, which is the path the generated cross-
 // references use (note: `proxy.capnp` is emitted into an `mp/` subdirectory but still referenced
 // flat, hence the explicit include path below).
