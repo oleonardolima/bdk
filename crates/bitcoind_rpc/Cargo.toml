@@ -51,3 +51,7 @@ ipc = ["std", "dep:capnp", "dep:capnp-rpc", "dep:tokio", "dep:tokio-util"]
 [[example]]
 name = "filter_iter"
 required-features = ["std"]
+
+[[example]]
+name = "ipc_emitter"
+required-features = ["ipc"]
