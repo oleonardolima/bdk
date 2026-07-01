@@ -20,6 +20,21 @@ bitcoin = { version = "0.32.0", default-features = false }
 bitcoincore-rpc = { version = "0.19.0" }
 bdk_core = { path = "../core", version = "0.6.1", default-features = false }
 
+# Optional deps for the experimental `ipc` feature (Bitcoin Core multiprocess IPC).
+# All gated behind `ipc` so the default build stays lean and async-free.
+capnp = { version = "0.21", optional = true }
+capnp-rpc = { version = "0.21", optional = true }
+tokio = { version = "1.41", optional = true, default-features = false, features = [
+    "net",
+    "rt",
+    "io-util",
+] }
+tokio-util = { version = "0.7", optional = true, features = ["compat"] }
+
+[build-dependencies]
+# Only invoked from build.rs when the `ipc` feature is enabled (gated on CARGO_FEATURE_IPC).
+capnpc = "0.21"
+
 [dev-dependencies]
 bdk_bitcoind_rpc = { path = "." }
 bdk_testenv = { path = "../testenv" }
@@ -29,7 +44,14 @@ bdk_chain = { path = "../chain" }
 default = ["std"]
 std = ["bitcoin/std", "bdk_core/std"]
 serde = ["bitcoin/serde", "bdk_core/serde"]
+# Experimental: emit blocks over Bitcoin Core's multiprocess IPC (Cap'n Proto) interface.
+# Requires a node built from Bitcoin Core PR #29409 and the `capnp` compiler at build time.
+ipc = ["std", "dep:capnp", "dep:capnp-rpc", "dep:tokio", "dep:tokio-util"]
 
 [[example]]
 name = "filter_iter"
 required-features = ["std"]
+
+[[example]]
+name = "ipc_emitter"
+required-features = ["ipc"]

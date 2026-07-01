@@ -7,6 +7,10 @@
 //! To only get block updates (exclude mempool transactions), the caller can use
 //! [`Emitter::next_block`] until it returns `Ok(None)` (which means the chain tip is reached). A
 //! separate method, [`Emitter::mempool`] can be used to emit the whole mempool.
+//!
+//! The optional, experimental `ipc` feature adds `ipc::IpcEmitter`, a block emitter that sources
+//! data over Bitcoin Core's multiprocess IPC (Cap'n Proto) interface instead of JSON-RPC. It
+//! requires a node built from Bitcoin Core PR #29409; see the `ipc` module docs.
 #![cfg_attr(coverage_nightly, feature(coverage_attribute))]
 #![warn(missing_docs)]
 
@@ -22,6 +26,13 @@ use bitcoincore_rpc::{bitcoincore_rpc_json, RpcApi};
 use core::ops::Deref;
 
 pub mod bip158;
+
+/// Experimental block emitter over Bitcoin Core's multiprocess IPC (Cap'n Proto) interface.
+///
+/// Requires a node built from Bitcoin Core PR #29409 and the `capnp` compiler at build time.
+/// See `examples/README.md` and `docs/ipc_poc_plan.md`.
+#[cfg(feature = "ipc")]
+pub mod ipc;
 
 pub use bitcoincore_rpc;
 
