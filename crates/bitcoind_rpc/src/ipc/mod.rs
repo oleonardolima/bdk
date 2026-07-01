@@ -2,8 +2,8 @@
 //!
 //! This is an experimental, feature-gated alternative to the JSON-RPC [`Emitter`](crate::Emitter).
 //! It talks to `bitcoin-node` over the multiprocess IPC unix socket instead of JSON-RPC, and is
-//! meant to mirror the JSON-RPC emitter: a synchronous, poll-based `next_block` loop that yields
-//! the same [`BlockEvent`](crate::BlockEvent) values.
+//! meant to mirror the JSON-RPC emitter: a synchronous, poll-based [`IpcEmitter::next_block`] loop
+//! that yields the same [`BlockEvent`](crate::BlockEvent) values.
 //!
 //! Requires a node built from Bitcoin Core PR #29409 (which exposes the `Chain` interface over
 //! IPC) and the `capnp` compiler at build time. See `examples/README.md`.
@@ -51,7 +51,10 @@ pub(crate) mod capnp_gen {
     }
 }
 
+mod emitter;
 mod rpc;
+
+pub use emitter::IpcEmitter;
 
 /// Errors returned by the IPC block emitter.
 #[derive(Debug)]
