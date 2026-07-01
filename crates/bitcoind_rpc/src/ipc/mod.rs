@@ -51,7 +51,10 @@ pub(crate) mod capnp_gen {
     }
 }
 
+mod emitter;
 mod rpc;
+
+pub use emitter::IpcEmitter;
 
 /// Errors returned by the IPC block emitter.
 #[derive(Debug)]
@@ -110,8 +113,3 @@ impl From<bitcoin::consensus::encode::Error> for Error {
         Error::BlockDecode(e)
     }
 }
-
-/// Poll-based block emitter over Bitcoin Core's multiprocess IPC interface.
-//
-// Skeleton: fields, `new`, and `next_block` are added in the following commit.
-pub struct IpcEmitter {}
