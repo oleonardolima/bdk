@@ -1,8 +1,9 @@
 //! Thin async wrappers around the Bitcoin Core `Chain` IPC interface.
 //!
 //! This layer owns the Cap'n Proto RPC session and exposes only the handful of `Chain` methods
-//! the block emitter needs. It is intentionally async (capnp-rpc is future-based); the
-//! synchronous [`IpcEmitter`](super::IpcEmitter) drives it via a current-thread runtime.
+//! the block emitter and filter scanner need. It is intentionally async (capnp-rpc is
+//! future-based); the synchronous [`IpcEmitter`](super::IpcEmitter) drives it via a
+//! current-thread runtime.
 //!
 //! Every request must carry the handshake `Thread` capability in its `Context`, otherwise the
 //! call never completes. Adapted from the `darosior/core_bdk_wallet` reference PoC.
@@ -12,7 +13,7 @@
 #![allow(dead_code)]
 
 use bdk_core::BlockId;
-use bitcoin::{consensus::Decodable, hashes::Hash, Block, BlockHash};
+use bitcoin::{consensus::Decodable, hashes::Hash, Block, BlockHash, ScriptBuf};
 use capnp_rpc::{rpc_twoparty_capnp, twoparty, RpcSystem};
 use tokio::task::{self, JoinHandle};
 use tokio_util::compat::{TokioAsyncReadCompatExt, TokioAsyncWriteCompatExt};
@@ -172,6 +173,67 @@ impl IpcInterface {
         req.get().set_min_height(min_height);
         let response = req.send().promise.await?;
         Ok(response.get()?.get_result())
+    }
+
+    /// Hash of the block at `height` on the branch ending at `tip_hash`
+    /// (`Chain::findAncestorByHeight` with `wantHash`, no block data). Unlike
+    /// [`block_hash`](Self::block_hash) this is pinned to `tip_hash`, so the returned hash and a
+    /// later fetch of the same height cannot straddle a reorg.
+    pub(super) async fn block_hash_at_height(
+        &self,
+        tip_hash: &BlockHash,
+        height: i32,
+    ) -> Result<BlockHash, Error> {
+        let mut req = self.chain.find_ancestor_by_height_request();
+        req.get().get_context()?.set_thread(self.thread.clone());
+        req.get().set_block_hash(tip_hash.as_ref());
+        req.get().set_ancestor_height(height);
+        req.get().get_ancestor()?.set_want_hash(true);
+        let response = req.send().promise.await?;
+        let ancestor = response.get()?.get_ancestor()?;
+        if !ancestor.get_found() {
+            let height = u32::try_from(height).map_err(|_| Error::HeightConversion(height))?;
+            return Err(Error::BlockNotFound { height });
+        }
+        Ok(BlockHash::from_slice(ancestor.get_hash()?).expect("node must serve 32-byte hashes"))
+    }
+
+    /// Whether the node maintains a block filter index of `filter_type`
+    /// (`Chain::hasBlockFilterIndex`). Filter type 0 is BASIC (BIP158); the node builds the index
+    /// when started with `-blockfilterindex=1`.
+    pub(super) async fn has_block_filter_index(&self, filter_type: u8) -> Result<bool, Error> {
+        let mut req = self.chain.has_block_filter_index_request();
+        req.get().get_context()?.set_thread(self.thread.clone());
+        req.get().set_filter_type(filter_type);
+        let response = req.send().promise.await?;
+        Ok(response.get()?.get_result())
+    }
+
+    /// Node-side BIP158 match: whether the filter for `block_hash` matches any script in
+    /// `filter_set` (`Chain::blockFilterMatchesAny`). The node does the matching against its
+    /// filter index, so no filter data ever crosses the socket. Returns `None` when the node
+    /// reports `hasResult == false`, i.e. the filter for this block is not (yet) available.
+    pub(super) async fn block_filter_matches_any(
+        &self,
+        filter_type: u8,
+        block_hash: &BlockHash,
+        filter_set: &[ScriptBuf],
+    ) -> Result<Option<bool>, Error> {
+        let mut req = self.chain.block_filter_matches_any_request();
+        req.get().get_context()?.set_thread(self.thread.clone());
+        req.get().set_filter_type(filter_type);
+        req.get().set_block_hash(block_hash.as_ref());
+        let len = u32::try_from(filter_set.len()).expect("spk set must fit in u32");
+        let mut set = req.get().init_filter_set(len);
+        for (i, spk) in filter_set.iter().enumerate() {
+            set.set(i as u32, spk.as_bytes());
+        }
+        let response = req.send().promise.await?;
+        let response = response.get()?;
+        if !response.get_has_result() {
+            return Ok(None);
+        }
+        Ok(Some(response.get_result()))
     }
 
     /// Cleanly shut down the RPC session.

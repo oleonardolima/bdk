@@ -1,11 +1,20 @@
-//! Block emitter over Bitcoin Core's multiprocess IPC (Cap'n Proto) interface.
+//! Block emitter and BIP158 filter scanner over Bitcoin Core's multiprocess IPC (Cap'n Proto)
+//! interface.
 //!
-//! This is an experimental, feature-gated alternative to the JSON-RPC [`Emitter`](crate::Emitter).
-//! It talks to `bitcoin-node` over the multiprocess IPC unix socket instead of JSON-RPC, and is
-//! meant to mirror the JSON-RPC emitter: a synchronous, poll-based
-//! [`next_block`](crate::ipc::IpcEmitter::next_block) loop that yields the same
-//! [`BlockEvent`](crate::BlockEvent) values. It is a proof of concept: only block emission is
-//! implemented (no mempool, no compact filters).
+//! This is an experimental, feature-gated alternative to the JSON-RPC [`Emitter`](crate::Emitter)
+//! and [`FilterIter`](crate::bip158::FilterIter). It talks to `bitcoin-node` over the multiprocess
+//! IPC unix socket instead of JSON-RPC:
+//!
+//! - [`IpcEmitter`](crate::ipc::IpcEmitter) mirrors the JSON-RPC emitter: a synchronous, poll-based
+//!   [`next_block`](crate::ipc::IpcEmitter::next_block) loop that yields the same
+//!   [`BlockEvent`](crate::BlockEvent) values.
+//! - [`IpcFilterIter`](crate::ipc::IpcFilterIter) mirrors the JSON-RPC `FilterIter`, but with a
+//!   twist: BIP158 filter matching happens *node-side* (`Chain::blockFilterMatchesAny`), so filters
+//!   are never downloaded and only matching blocks cross the socket. Requires
+//!   `-blockfilterindex=1`.
+//!
+//! It is a proof of concept: no mempool emission, and each `blockFilterMatchesAny` call sends the
+//! whole script set for one block (batching/pipelining across heights is future work).
 //!
 //! # Experimental: requires a patched Bitcoin Core
 //!
@@ -62,11 +71,15 @@ pub(crate) mod capnp_gen {
 }
 
 mod emitter;
+mod filter_iter;
 mod rpc;
 
 pub use emitter::IpcEmitter;
+pub use filter_iter::IpcFilterIter;
+// Re-exported so IPC filter events read the same as the JSON-RPC `FilterIter` ones.
+pub use crate::bip158::Event;
 
-/// Errors returned by the IPC block emitter.
+/// Errors returned by the IPC block emitter and filter scanner.
 #[derive(Debug)]
 pub enum Error {
     /// I/O error connecting to or communicating over the IPC socket.
@@ -88,6 +101,15 @@ pub enum Error {
     /// The node and our checkpoint chain share no common ancestor (should never happen against
     /// a node on the same network).
     ReorgTooDeep,
+    /// The node has no BASIC (BIP158) block filter index; start `bitcoin-node` with
+    /// `-blockfilterindex=1`.
+    NoBlockFilterIndex,
+    /// The filter for the block at `height` is not available. This is transient while the node's
+    /// filter index is still building; retry once the index reaches the scanned range.
+    FilterUnavailable {
+        /// Height whose filter could not be queried.
+        height: u32,
+    },
 }
 
 impl core::fmt::Display for Error {
@@ -100,6 +122,14 @@ impl core::fmt::Display for Error {
             Error::BlockDecode(e) => write!(f, "failed to decode block from node: {e}"),
             Error::CheckpointPush => write!(f, "failed to extend the checkpoint chain"),
             Error::ReorgTooDeep => write!(f, "no common ancestor with the node's chain"),
+            Error::NoBlockFilterIndex => write!(
+                f,
+                "node has no BASIC block filter index (start bitcoin-node with -blockfilterindex=1)"
+            ),
+            Error::FilterUnavailable { height } => write!(
+                f,
+                "block filter unavailable at height {height} (index still building?)"
+            ),
         }
     }
 }

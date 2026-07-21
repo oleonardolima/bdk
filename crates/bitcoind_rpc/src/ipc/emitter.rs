@@ -179,7 +179,8 @@ async fn poll_next(
 
 /// Rewind `cp` to the checkpoint at `ancestor.height`. If that height is not in our (sparse)
 /// checkpoint chain, rebuild from the ancestor's `(height, hash)` alone so emission can continue.
-fn rewind_to(cp: &mut CheckPoint<BlockHash>, ancestor: &BlockId) {
+/// Shared with the filter scanner (`filter_iter.rs`), which handles reorgs the same way.
+pub(super) fn rewind_to(cp: &mut CheckPoint<BlockHash>, ancestor: &BlockId) {
     match cp.get(ancestor.height) {
         Some(found) => *cp = found,
         None => *cp = CheckPoint::new(ancestor.height, ancestor.hash),
