@@ -3,14 +3,13 @@
 
 use std::time::Instant;
 
-use bdk_chain::bitcoin::hashes::hex::FromHex;
 use bdk_chain::bitcoin::{constants::genesis_block, secp256k1::Secp256k1, Network};
 use bdk_chain::indexer::keychain_txout::KeychainTxOutIndex;
 use bdk_chain::local_chain::LocalChain;
 use bdk_chain::miniscript::Descriptor;
 use bdk_chain::{ConfirmationBlockTime, IndexedTxGraph};
 use bdk_testenv::anyhow;
-use bitcoinkernel::{ChainstateManagerBuilder, ContextBuilder, KernelError, Log, Logger};
+use bitcoinkernel::{ChainType, ChainstateManagerBuilder, ContextBuilder, KernelError, Log, Logger};
 use env_logger::Builder;
 use log::LevelFilter;
 
@@ -27,12 +26,10 @@ mod kernel_iter;
 /// Default bitcoind data directory, used when the `DATA_DIR` environment variable is unset.
 const DEFAULT_DATA_DIR: &str = "/root/.bitcoin/signet";
 
-/// Custom signet challenge (the serialized script blocks must satisfy), as a hex string.
-/// See the `signetchallenge` setting in vinteum-bdl's `infra-signet-server/config/bitcoin.conf`.
-const SIGNET_CHALLENGE: &str = "0014bdec02fe5ec499cc2cb52dc160230643a84dd118";
-
 const NETWORK: Network = Network::Signet;
 
+// NOTE: these descriptors are not funded on the public signet, so the "Unspent" section
+// below will be empty unless they receive coins (e.g. from a signet faucet).
 const EXTERNAL: &str = "wpkh(tprv8ZgxMBicQKsPdhhv1KhNWaxPcRpsNcpHK63mQ4wkXf2DNk3yHQ8eY7MZF6985J2FezXvY4ZpwjQqccgqH6RczR3axnwUBF351NrfvdJc2Pg/84h/1h/0h/0/*)";
 const INTERNAL: &str = "wpkh(tprv8ZgxMBicQKsPdhhv1KhNWaxPcRpsNcpHK63mQ4wkXf2DNk3yHQ8eY7MZF6985J2FezXvY4ZpwjQqccgqH6RczR3axnwUBF351NrfvdJc2Pg/84h/1h/0h/1/*)";
 
@@ -65,8 +62,7 @@ fn main() -> anyhow::Result<()> {
     let data_dir = std::env::var("DATA_DIR").unwrap_or_else(|_| DEFAULT_DATA_DIR.to_string());
     let blocks_dir = format!("{data_dir}/blocks");
 
-    let challenge = Vec::<u8>::from_hex(SIGNET_CHALLENGE)?;
-    let context = ContextBuilder::new().signet(&challenge).build()?;
+    let context = ContextBuilder::new().chain_type(ChainType::Signet).build()?;
 
     let chainstate_manager =
         ChainstateManagerBuilder::new(&context, &data_dir, &blocks_dir)?.build()?;

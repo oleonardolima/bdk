@@ -8,6 +8,6 @@ edition = "2021"
 [dependencies]
 bdk_chain = { path = "../../crates/chain", features = ["serde"] }
 bdk_testenv = { path = "../../crates/testenv", features = ["serde"] }
-bitcoinkernel = { git = "https://github.com/oleonardolima/rust-bitcoinkernel", branch = "feat/add-custom-signet-support" }
+bitcoinkernel = { git = "https://github.com/oleonardolima/rust-bitcoinkernel", branch = "test/pr32427-blocktreestore" }
 env_logger = { version = "0.11" }
 log = { version = "0.4" }
